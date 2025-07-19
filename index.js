@@ -30,7 +30,7 @@ const verifyToken = (req, res, next) => {
 }
 
 
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.u6wg9.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -45,12 +45,14 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
+        // await client.connect();
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
+        // await client.db("admin").command({ ping: 1 });
+        // console.log("Pinged your deployment. You successfully connected to MongoDB!");
 
         const userCollection = client.db('hospitalCampManagement').collection("users")
+        const campCollection = client.db('hospitalCampManagement').collection('camps')
+        const registerCollection = client.db('hospitalCampManagement').collection('registrations')
 
         app.post('/jwt', async (req, res) => {
             const email = req.body
@@ -80,6 +82,36 @@ async function run() {
             const result = await userCollection.find().toArray()
             res.send(result)
         })
+
+        app.post('/addCamp', async (req, res) => {
+            const data = req.body;
+            const result = await campCollection.insertOne(data);
+            res.send(result)
+        })
+
+        app.get('/camps', async (req, res) => {
+            const result = await campCollection.find().toArray()
+            res.send(result)
+        })
+
+        app.get('/camp-details/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) }
+            const result = await campCollection.findOne(query)
+            res.send(result)
+        })
+
+
+        app.post('/registrations', async (req, res) => {
+            const data = req.body;
+            const result = await registerCollection.insertOne(data);
+            res.send(result)
+        })
+
+        app.patch('/registrations', async (req, res) => {
+            // const 
+        })
+
 
 
     } finally {
