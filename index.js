@@ -157,6 +157,14 @@ async function run() {
             res.send(result)
         })
 
+        app.get('/update-camp/:email', verifyToken, async (req, res) => {
+            const email = req.params.email;
+            const query = { organizerEmail: email }
+            const result = await campCollection.find(query).toArray()
+            res.send(result)
+            console.log(result);
+        })
+
 
 
     } finally {
