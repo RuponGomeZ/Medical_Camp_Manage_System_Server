@@ -157,12 +157,19 @@ async function run() {
             res.send(result)
         })
 
-        app.get('/update-camp/:email', verifyToken, async (req, res) => {
+        app.get('/manage-camp/:email', verifyToken, async (req, res) => {
             const email = req.params.email;
             const query = { organizerEmail: email }
             const result = await campCollection.find(query).toArray()
             res.send(result)
             console.log(result);
+        })
+
+        app.delete('/update-camp/:campId', verifyToken, async (req, res) => {
+            const id = req.params.campId;
+            const query = { _id: new ObjectId(id) }
+            const result = await campCollection.deleteOne(query)
+            res.send(result)
         })
 
 
