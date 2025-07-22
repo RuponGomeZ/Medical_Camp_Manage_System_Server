@@ -76,10 +76,29 @@ async function run() {
                 .send({ success: true })
         })
 
+        app.post('/users', async (req, res) => {
+            const email = req.body.email;
+            const data = req.body
+            const query = { email }
+            const existingUser = await userCollection.findOne(query)
+            if (!existingUser) {
+                const result = await userCollection.insertOne({ ...data, role: 'participant' })
+                res.send(result)
+            } else {
+                res.send({ message: "User already exist" })
+            }
+        })
 
 
         app.get('/users', async (req, res) => {
             const result = await userCollection.find().toArray()
+            res.send(result)
+        })
+
+        app.get('/user/:email', async (req, res) => {
+            const email = req.params.email;
+            const query = { email }
+            const result = await userCollection.findOne(query)
             res.send(result)
         })
 
@@ -102,14 +121,40 @@ async function run() {
         })
 
 
-        app.post('/registrations', async (req, res) => {
+        app.post('/registrations/:email', async (req, res) => {
             const data = req.body;
+            const email = req.params.email;
+            const campId = data.campId
+            const query = { participantEmail: (email), campId }
+            const isExist = await registerCollection.findOne(query)
+            if (isExist) {
+                return res.send({ message: "You have already applied to join this camp!" })
+            }
+
             const result = await registerCollection.insertOne(data);
             res.send(result)
         })
 
-        app.patch('/registrations', async (req, res) => {
-            // const 
+
+        app.get('/registrations/:email', async (req, res) => {
+
+            const email = req.params.email;
+            const campId = req.query.campId;
+            const query = { participantEmail: (email), campId }
+            const isExist = await registerCollection.find(query).toArray()
+            console.log(isExist);
+
+            res.send(isExist)
+        })
+
+        app.patch('/registrations-participantCount/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) }
+            let updatedDoc = {
+                $inc: { participantCount: 1 }
+            }
+            const result = await campCollection.updateOne(query, updatedDoc)
+            res.send(result)
         })
 
 
