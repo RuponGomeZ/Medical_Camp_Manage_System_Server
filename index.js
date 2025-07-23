@@ -165,13 +165,23 @@ async function run() {
             console.log(result);
         })
 
-        app.delete('/update-camp/:campId', verifyToken, async (req, res) => {
+        app.delete('/delete-camp/:campId', verifyToken, async (req, res) => {
             const id = req.params.campId;
             const query = { _id: new ObjectId(id) }
             const result = await campCollection.deleteOne(query)
             res.send(result)
         })
 
+        app.patch('/update-camp/:campId', verifyToken, async (req, res) => {
+            const id = req.params.campId;
+            const query = { _id: new ObjectId(id) }
+            const data = req.body;
+            const updatedDoc = {
+                $set: data
+            }
+            const result = await campCollection.updateOne(query, updatedDoc)
+            res.send(result)
+        })
 
 
     } finally {
