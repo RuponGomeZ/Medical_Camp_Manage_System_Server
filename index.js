@@ -4,6 +4,7 @@ const express = require("express");
 const cors = require('cors')
 const app = express();
 const port = process.env.PORT || 5000;
+const stripe = require('stripe')(process.env.PAYMENT_SECRET_KEY);
 
 const corsOption = {
     origin: ['http://localhost:5173'],
@@ -53,11 +54,13 @@ async function run() {
         const userCollection = client.db('hospitalCampManagement').collection("users")
         const campCollection = client.db('hospitalCampManagement').collection('camps')
         const registerCollection = client.db('hospitalCampManagement').collection('registrations')
+        const feedBackCollection = client.db('hospitalCampManagement').collection('feedBacks')
+        const orderCollection = client.db('hospitalCampManagement').collection('orders')
 
         app.post('/jwt', async (req, res) => {
             const email = req.body
             const token = jwt.sign(email, process.env.ACCESS_TOKEN, {
-                expiresIn: '365d',
+                expiresIn: '7d',
             })
             res.cookie('token', token, {
                 httpOnly: true,
@@ -76,6 +79,17 @@ async function run() {
                 .send({ success: true })
         })
 
+
+        const verifyOrganizer = async (req, res, next) => {
+            const email = req.user.email;
+            const query = { email };
+            const result = await userCollection.findOne(query)
+            if (!result || result?.role !== 'organizer') {
+                return res.status(403).send({ message: 'Forbidden access! Organizer only action!' })
+            }
+            next()
+        }
+
         app.post('/users', async (req, res) => {
             const email = req.body.email;
             const data = req.body
@@ -91,7 +105,37 @@ async function run() {
 
 
         app.get('/users', async (req, res) => {
-            const result = await userCollection.find().toArray()
+            try {
+                const email = req.query.email;
+
+                if (email) {
+                    const result = await userCollection.findOne({ email });
+                    return res.send(result); // send single user
+                }
+
+                const result = await userCollection.find().toArray(); // send all users
+                res.send(result);
+            } catch (error) {
+                console.error('Error fetching users:', error);
+                res.status(500).send({ error: 'Internal Server Error' });
+            }
+        })
+
+        app.get('/users/:email', async (req, res) => {
+            const email = req.params.email;
+            const query = { email }
+            const result = await userCollection.findOne(query)
+            res.send(result)
+        })
+
+        app.patch('/users/:id', async (req, res) => {
+            const id = req.params.id;
+            const data = req.body;
+            const query = { _id: new ObjectId(id) }
+            const updatedDoc = {
+                $set: data
+            }
+            const result = await userCollection.updateOne(query, updatedDoc)
             res.send(result)
         })
 
@@ -115,10 +159,9 @@ async function run() {
                 $or: [
                     { campName: { $regex: search, $options: 'i' } },
                     { location: { $regex: search, $options: 'i' } },
-                    { dateTime: { $regex: search, $options: 'i' } }
+                    { date: { $regex: search, $options: 'i' } }
                 ]
             }
-            console.log(sort);
             let sortOption = {};
 
             if (sort === 'most-registered') {
@@ -126,13 +169,13 @@ async function run() {
             }
 
             if (sort === "camp-fees") {
-                sortOption = { campFee: 1 }
+                sortOption = { campFees: 1 }
             }
 
             if (sort === "camp-name") {
                 sortOption = { campName: 1 }
             }
-            // console.log(sortOption);
+
 
             const result = await campCollection.find(query).sort(sortOption).toArray()
             res.send(result)
@@ -151,13 +194,19 @@ async function run() {
             const email = req.params.email;
             const campId = data.campId
             const query = { participantEmail: (email), campId }
-            const isExist = await registerCollection.findOne(query)
-            if (isExist) {
+            const isExist = await registerCollection.find(query).toArray()
+            if (isExist.length > 0) {
                 return res.send({ message: "You have already applied to join this camp!" })
             }
 
+            const ownCamp = { organizerEmail: (email), campId }
+            const checkOwnCamp = await registerCollection.find(ownCamp).toArray()
+            if (checkOwnCamp.length > 0) {
+                return res.send({ message: "You cant apply to join your own camp" })
+            }
+
             const result = await registerCollection.insertOne(data);
-            res.send(result)
+            res.send(result);
         })
 
 
@@ -166,10 +215,9 @@ async function run() {
             const email = req.params.email;
             const campId = req.query.campId;
             const query = { participantEmail: (email), campId }
-            const isExist = await registerCollection.find(query).toArray()
-            console.log(isExist);
+            const result = await registerCollection.find(query).toArray()
 
-            res.send(isExist)
+            res.send(result)
         })
 
         app.patch('/registrations-participantCount/:id', async (req, res) => {
@@ -179,6 +227,42 @@ async function run() {
                 $inc: { participantCount: 1 }
             }
             const result = await campCollection.updateOne(query, updatedDoc)
+            res.send(result);
+        })
+
+        app.patch('/status-update', verifyToken, verifyOrganizer, async (req, res) => {
+            const id = req.query.id;
+            const status = req.query.status;
+            const userEmail = req.user.email;
+            const query = { _id: new ObjectId(id) }
+            const checkSameOrganizer = await registerCollection.findOne(query)
+
+            if (checkSameOrganizer.organizerEmail !== userEmail) {
+                return res.send({ message: "Unauthorized Access!" })
+            }
+            const updatedDoc = {
+                $set: {
+                    confirmationStatus: status
+                }
+            }
+            const result = await registerCollection.updateOne(query, updatedDoc)
+            res.send(result)
+        })
+
+        app.delete('/cancel-registration', verifyToken, verifyOrganizer, async (req, res) => {
+            const id = req.query.id;
+            const userEmail = req.user.email;
+            const query = { _id: new ObjectId(id) }
+            const registration = await registerCollection.findOne(query)
+            if (!registration) {
+                return res.status(404).send({ message: "Registration not found" });
+            }
+
+            if (registration.organizerEmail !== userEmail) {
+                return res.send({ message: "Unauthorized Access!" })
+            }
+
+            const result = await registerCollection.deleteOne(query)
             res.send(result)
         })
 
@@ -187,7 +271,6 @@ async function run() {
             const query = { organizerEmail: email }
             const result = await campCollection.find(query).toArray()
             res.send(result)
-            console.log(result);
         })
 
         app.delete('/delete-camp/:campId', verifyToken, async (req, res) => {
@@ -208,6 +291,83 @@ async function run() {
             res.send(result)
         })
 
+        app.get('/manage-registered-camps', verifyToken, verifyOrganizer, async (req, res) => {
+            const email = req.user.email;
+            const query = { organizerEmail: email }
+            const result = await registerCollection.find(query).toArray()
+            res.send(result)
+        })
+
+        app.get('/registered-camps', verifyToken, async (req, res) => {
+            const email = req.user.email;
+            const query = { participantEmail: email }
+            const result = await registerCollection.find(query).toArray()
+            res.send(result)
+        })
+
+        app.delete('/cancel/:id', verifyToken, async (req, res) => {
+            const email = req.user.email;
+            const id = req.params.id
+            const query = { _id: new ObjectId(id) }
+            const findCamp = await registerCollection.findOne(query)
+            if (findCamp.participantEmail !== email) {
+                return res.send({ message: "Unauthorized Access" })
+            }
+            const result = await registerCollection.deleteOne(query)
+            res.send(result)
+        })
+
+        // Feedbacks
+
+        app.post('/feedback', verifyToken, async (req, res) => {
+            // TODO
+            const feedback = req.body;
+            const result = await feedBackCollection.insertOne(feedback)
+            res.send(result)
+        })
+
+        app.get('/feedback', async (req, res) => {
+            const result = await feedBackCollection.find().toArray()
+            res.send(result)
+        })
+
+        // Payment intent
+        app.post('/create-payment-intent', verifyToken, async (req, res) => {
+            const { campId } = req.body
+            const camp = await campCollection.findOne({ _id: new ObjectId(campId) })
+            if (!camp) {
+                return res.status(400).send({ message: "Camp not found" })
+            }
+            const price = camp.campFees * 100
+            const { client_secret } = await stripe.paymentIntents.create({
+                amount: price,
+                currency: 'usd',
+                automatic_payment_methods: {
+                    enabled: true,
+                },
+            })
+            res.send({ clientSecret: client_secret });
+        })
+
+        app.post('/order', verifyToken, async (req, res) => {
+            const orderInfo = req.body
+            const result = await orderCollection.insertOne(orderInfo)
+            res.send(result)
+        })
+
+        app.patch('/payment-status-update', verifyToken, async (req, res) => {
+            const id = req.query.id;
+            const status = req.query.status
+            const query = { _id: new ObjectId(id) }
+            console.log(id);
+            const updatedDoc = {
+                $set: {
+                    paymentStatus: status
+                }
+            }
+            const result = await registerCollection.updateOne(query, updatedDoc)
+            res.send(result)
+        })
 
     } finally {
         // Ensures that the client will close when you finish/error
