@@ -230,24 +230,71 @@ async function run() {
             res.send(result);
         })
 
-        app.patch('/status-update', verifyToken, verifyOrganizer, async (req, res) => {
-            const id = req.query.id;
-            const status = req.query.status;
-            const userEmail = req.user.email;
-            const query = { _id: new ObjectId(id) }
-            const checkSameOrganizer = await registerCollection.findOne(query)
+        // app.patch('/status-update', verifyToken, verifyOrganizer, async (req, res) => {
+        //     const id = req.query.id;
+        //     const status = req.query.status;
+        //     const userEmail = req.user.email;
+        //     const query = { _id: new ObjectId(id) }
+        //     const checkSameOrganizer = await registerCollection.findOne(query)
 
-            if (checkSameOrganizer.organizerEmail !== userEmail) {
-                return res.send({ message: "Unauthorized Access!" })
-            }
-            const updatedDoc = {
-                $set: {
-                    confirmationStatus: status
+        //     if (checkSameOrganizer.organizerEmail !== userEmail) {
+        //         return res.send({ message: "Unauthorized Access!" })
+        //     }
+        //     const updatedDoc = {
+        //         $set: {
+        //             confirmationStatus: status
+        //         }
+        //     }
+        //     const result = await registerCollection.updateOne(query, updatedDoc)
+        //     res.send(result)
+        // })
+
+
+        app.patch('/order-confirm', verifyToken, verifyOrganizer, async (req, res) => {
+            try {
+                const id = req.query.id;
+                const status = req.query.status;
+                const userEmail = req.user.email;
+
+                // First find the registration to verify organizer
+                const registrationQuery = { _id: new ObjectId(id) };
+                const registration = await registerCollection.findOne(registrationQuery);
+
+                if (!registration) {
+                    return res.status(404).send({ message: "Registration not found" });
                 }
+
+                if (registration.organizerEmail !== userEmail) {
+                    return res.status(403).send({ message: "Unauthorized Access!" });
+                }
+
+                // Update both registration and order collections
+                const updatedDoc = {
+                    $set: { confirmationStatus: status }
+                };
+
+                // Update registration
+                const regResult = await registerCollection.updateOne(
+                    registrationQuery,
+                    updatedDoc
+                );
+
+                // Update corresponding order
+                const orderQuery = { registrationId: (id) };
+                const orderResult = await orderCollection.updateOne(
+                    orderQuery,
+                    updatedDoc
+                );
+
+                res.send({
+                    registrationModified: regResult.modifiedCount,
+                    orderModified: orderResult.modifiedCount
+                });
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({ message: "Server error" });
             }
-            const result = await registerCollection.updateOne(query, updatedDoc)
-            res.send(result)
-        })
+        });
 
         app.delete('/cancel-registration', verifyToken, verifyOrganizer, async (req, res) => {
             const id = req.query.id;
@@ -359,7 +406,6 @@ async function run() {
             const id = req.query.id;
             const status = req.query.status
             const query = { _id: new ObjectId(id) }
-            console.log(id);
             const updatedDoc = {
                 $set: {
                     paymentStatus: status
@@ -368,6 +414,27 @@ async function run() {
             const result = await registerCollection.updateOne(query, updatedDoc)
             res.send(result)
         })
+
+        app.get('/payment-status-update', verifyToken, async (req, res) => {
+            const email = req.user.email;
+            const query = { 'customer.email': email }
+            const result = await orderCollection.find(query).toArray()
+            res.send(result)
+        })
+
+        // app.patch('/order-confirm', verifyToken, verifyOrganizer, async (req, res) => {
+        //     const id = req.query.id;
+        //     const status = req.query.status;
+        //     const query = { registrationId: new ObjectId(id) }
+
+        //     const updatedDoc = {
+        //         $set: {
+        //             confirmationStatus: status
+        //         }
+        //     }
+        //     const result = await orderCollection.updateOne(query, updatedDoc)
+        //     res.send(result)
+        // })
 
     } finally {
         // Ensures that the client will close when you finish/error
