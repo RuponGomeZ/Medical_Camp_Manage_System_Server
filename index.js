@@ -7,7 +7,7 @@ const port = process.env.PORT || 5000;
 const stripe = require('stripe')(process.env.PAYMENT_SECRET_KEY);
 
 const corsOption = {
-    origin: ['http://localhost:5173'],
+    origin: ['http://localhost:5173', 'https://medical-camp-management-dda87.web.app'],
     credentials: true,
     optionSuccessStatus: 200,
 }
@@ -323,8 +323,8 @@ async function run() {
         app.delete('/delete-camp/:campId', verifyToken, async (req, res) => {
             const id = req.params.campId;
             const query = { _id: new ObjectId(id) }
-            const result = await campCollection.deleteOne(query)
-            res.send(result)
+            const result = await campCollection.deleteOne(query);
+            res.send(result);
         })
 
         app.patch('/update-camp/:campId', verifyToken, async (req, res) => {
