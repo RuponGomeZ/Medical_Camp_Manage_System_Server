@@ -342,26 +342,26 @@ async function run() {
             const email = req.user.email;
             const query = { organizerEmail: email }
             const result = await registerCollection.find(query).toArray()
-            res.send(result)
+            res.send(result);
         })
 
         app.get('/registered-camps', verifyToken, async (req, res) => {
             const email = req.user.email;
             const query = { participantEmail: email }
             const result = await registerCollection.find(query).toArray()
-            res.send(result)
+            res.send(result);
         })
 
         app.delete('/cancel/:id', verifyToken, async (req, res) => {
             const email = req.user.email;
-            const id = req.params.id
+            const id = req.params.id;
             const query = { _id: new ObjectId(id) }
-            const findCamp = await registerCollection.findOne(query)
+            const findCamp = await registerCollection.findOne(query);
             if (findCamp.participantEmail !== email) {
                 return res.send({ message: "Unauthorized Access" })
             }
-            const result = await registerCollection.deleteOne(query)
-            res.send(result)
+            const result = await registerCollection.deleteOne(query);
+            res.send(result);
         })
 
         // Feedbacks
