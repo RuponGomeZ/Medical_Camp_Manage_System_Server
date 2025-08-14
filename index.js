@@ -45,11 +45,7 @@ const client = new MongoClient(uri, {
 
 async function run() {
     try {
-        // Connect the client to the server	(optional starting in v4.7)
-        // await client.connect();
-        // Send a ping to confirm a successful connection
-        // await client.db("admin").command({ ping: 1 });
-        // console.log("Pinged your deployment. You successfully connected to MongoDB!");
+
 
         const userCollection = client.db('hospitalCampManagement').collection("users")
         const campCollection = client.db('hospitalCampManagement').collection('camps')
@@ -110,10 +106,10 @@ async function run() {
 
                 if (email) {
                     const result = await userCollection.findOne({ email });
-                    return res.send(result); // send single user
+                    return res.send(result);
                 }
 
-                const result = await userCollection.find().toArray(); // send all users
+                const result = await userCollection.find().toArray();
                 res.send(result);
             } catch (error) {
                 console.error('Error fetching users:', error);
@@ -230,24 +226,6 @@ async function run() {
             res.send(result);
         })
 
-        // app.patch('/status-update', verifyToken, verifyOrganizer, async (req, res) => {
-        //     const id = req.query.id;
-        //     const status = req.query.status;
-        //     const userEmail = req.user.email;
-        //     const query = { _id: new ObjectId(id) }
-        //     const checkSameOrganizer = await registerCollection.findOne(query)
-
-        //     if (checkSameOrganizer.organizerEmail !== userEmail) {
-        //         return res.send({ message: "Unauthorized Access!" })
-        //     }
-        //     const updatedDoc = {
-        //         $set: {
-        //             confirmationStatus: status
-        //         }
-        //     }
-        //     const result = await registerCollection.updateOne(query, updatedDoc)
-        //     res.send(result)
-        // })
 
 
         app.patch('/order-confirm', verifyToken, verifyOrganizer, async (req, res) => {
@@ -256,7 +234,7 @@ async function run() {
                 const status = req.query.status;
                 const userEmail = req.user.email;
 
-                // First find the registration to verify organizer
+
                 const registrationQuery = { _id: new ObjectId(id) };
                 const registration = await registerCollection.findOne(registrationQuery);
 
@@ -268,18 +246,17 @@ async function run() {
                     return res.status(403).send({ message: "Unauthorized Access!" });
                 }
 
-                // Update both registration and order collections
+
                 const updatedDoc = {
                     $set: { confirmationStatus: status }
                 };
 
-                // Update registration
+
                 const regResult = await registerCollection.updateOne(
                     registrationQuery,
                     updatedDoc
                 );
 
-                // Update corresponding order
                 const orderQuery = { registrationId: (id) };
                 const orderResult = await orderCollection.updateOne(
                     orderQuery,
@@ -367,7 +344,7 @@ async function run() {
         // Feedbacks
 
         app.post('/feedback', verifyToken, async (req, res) => {
-            // TODO
+
             const feedback = req.body;
             const result = await feedBackCollection.insertOne(feedback)
             res.send(result)
@@ -422,23 +399,10 @@ async function run() {
             res.send(result)
         })
 
-        // app.patch('/order-confirm', verifyToken, verifyOrganizer, async (req, res) => {
-        //     const id = req.query.id;
-        //     const status = req.query.status;
-        //     const query = { registrationId: new ObjectId(id) }
 
-        //     const updatedDoc = {
-        //         $set: {
-        //             confirmationStatus: status
-        //         }
-        //     }
-        //     const result = await orderCollection.updateOne(query, updatedDoc)
-        //     res.send(result)
-        // })
 
     } finally {
-        // Ensures that the client will close when you finish/error
-        // await client.close();
+
     }
 }
 run().catch(console.dir);
